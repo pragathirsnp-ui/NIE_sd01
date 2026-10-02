@@ -49,4 +49,3 @@ def ticket_delete(id:int):
         raise HTTPException(status_code=404,detail="Ticket not found")
     del db[id]
     return {"message":"Ticket deleted successfully"}
-

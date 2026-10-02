@@ -14,20 +14,20 @@ app = FastAPI()
 # Mongo 
 URL = "mongodb://127.0.0.1:27017"
 client = MongoClient(URL)
-db = client["college_service_request_db"]
-ticket_collection = db["service_requests"]
+db = client["richest_tickets_db"]
+ticket_collection = db["tickets"]
 user_collection = db["users"]
 
 # Security config
 password_hash = PasswordHash.recommended()
-SECRET_KEY = "CollegeServiceRequestSecurityKey-ChangeThis"
+SECRET_KEY = "ITServiceDeskSecurityKey-ChangeThis"
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINS = 30
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 # Pydantic
-# ... service requests
+# ... tickets
 class TicketCreate(BaseModel):
     title : str 
     description : str 
@@ -49,7 +49,7 @@ class TokenResponse(BaseModel):
     token_type : str 
     
 # helper 
-# ... service_request_helper
+# ... ticket_helper
 def ticket_helper(ticket):
     return {
         "id" : str(ticket["_id"]),
@@ -58,13 +58,12 @@ def ticket_helper(ticket):
         "category" : ticket["category"],
         "status" : ticket["status"]       
     }
-
 # ... user_helper
 def user_helper(user):
      return {
         "id": str(user["_id"]),
         "username": user["username"],
-        "role": user["role"]     # 1 = Student # 2 = Staff # 3 = HOD # 4 = Admin
+        "role": user["role"]     # 1 = Employee # 2 = Support Engineer # 3 = Team Lead # 4 = Admin
     }
      
 # create jwt 
@@ -126,44 +125,44 @@ def login(form_data : OAuth2PasswordRequestForm = Depends()):
     token = create_token(user["username"], user["role"])
     return {"access_token" : token, "token_type" : "bearer"}
 
-# ... service requests
-@app.post("/service-requests", status_code=201, response_model=TicketResponse)
+# ... tickets
+@app.post("/tickets", status_code=201, response_model=TicketResponse)
 def tickets_create(payload : TicketCreate,  current_user=Depends(require_roles(1,2,3,4)) ):
     ticket_dict = payload.model_dump()
     result = ticket_collection.insert_one(ticket_dict)
     new_ticket = ticket_collection.find_one({"_id" : result.inserted_id})
     return ticket_helper(new_ticket)
 
-@app.get("/service-requests", response_model=list[TicketResponse])
+@app.get("/tickets", response_model=list[TicketResponse])
 def tickets_read_all(current_user=Depends(require_roles(1, 2, 3, 4))):
     tickets_result = ticket_collection.find()
     tickets = [ticket_helper(ticket) for ticket in tickets_result]
     return tickets 
 
-@app.get("/service-requests/{id}", response_model=TicketResponse)
+@app.get("/tickets/{id}", response_model=TicketResponse)
 def ticket_read_by_id(id: str,  current_user=Depends(require_roles(1, 2, 3, 4))):
     if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid service request ID format")
+        raise HTTPException(status_code=400, detail="Invalid ticket ID format")
     ticket_result = ticket_collection.find_one({"_id": ObjectId(id)})
     if not ticket_result:
-        raise HTTPException(status_code=404, detail="Service request not found")
+        raise HTTPException(status_code=404, detail="Ticket not found")
     return ticket_helper(ticket_result)
 
-@app.put("/service-requests/{id}", response_model=TicketResponse)
+@app.put("/tickets/{id}", response_model=TicketResponse)
 def ticket_update(id: str, payload : TicketCreate,  current_user=Depends(require_roles(2, 3, 4))):
     if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid service request ID format")
+        raise HTTPException(status_code=400, detail="Invalid ticket ID format")
     result = ticket_collection.update_one({"_id": ObjectId(id)}, {"$set": payload.model_dump()})
     if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Service request not found")
+        raise HTTPException(status_code=404, detail="Ticket not found")
     new_ticket = ticket_collection.find_one({"_id" : ObjectId(id)})
     return ticket_helper(new_ticket)
 
-@app.delete("/service-requests/{id}")
+@app.delete("/tickets/{id}")
 def ticket_delete(id: str,  current_user=Depends(require_roles(4))):
     if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid service request ID format")
+        raise HTTPException(status_code=400, detail="Invalid ticket ID format")
     result = ticket_collection.delete_one({"_id": ObjectId(id)})
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Service request not found")
-    return {"message" : "service request deleted successfully"}
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return {"message" : "ticket deleted successfully"}
